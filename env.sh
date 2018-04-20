@@ -10,7 +10,7 @@ cd $1
 git checkout openshift
 
 echo "Login to openshift ..."
-oc login $OC_URL --token $OC_TOKEN
+oc login $OC_URL --token $OC_TOKEN --insecure-skip-tls-verify
 #oc login $OC_URL --username=$USER --password=$PASS --insecure-skip-tls-verify=true
 oc project $PROJECTNAME | oc new-project $PROJECTNAME
 
