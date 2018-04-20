@@ -1,6 +1,6 @@
 #!/bin/bash
-CONFIGMAPNAME=$(echo $1 | cut -d "-" -f2 | tr '[:upper:]' '[:lower:]')
-PROJECTNAME=$(echo $2 | cut -d "-" -f2 | tr '[:upper:]' '[:lower:]')
+CONFIGMAPNAME=$(echo $1 | tr '[:upper:]' '[:lower:]')
+PROJECTNAME=$(echo $2 | tr '[:upper:]' '[:lower:]')
 
 echo "Getting config.properties file ..."
 mkdir -p /usr/src/app
