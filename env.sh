@@ -1,12 +1,12 @@
 #!/bin/bash
-CONFIGMAPNAME=$(echo $1 | tr '[:upper:]' '[:lower:]')
-PROJECTNAME=$(echo $2 | tr '[:upper:]' '[:lower:]')
+CONFIGMAPNAME=$(echo $CONFIG_NAME | tr '[:upper:]' '[:lower:]')
+PROJECTNAME=$(echo $PROJECT_NAME | tr '[:upper:]' '[:lower:]')
 
 echo "Getting config.properties file ..."
 mkdir -p /usr/src/app
 cd /usr/src/app
-git clone https://github.com/dparra0007/$1.git
-cd $1
+git clone https://github.com/dparra0007/$CONFIG_NAME.git
+cd $CONFIG_NAME
 git checkout openshift
 
 echo "Login to openshift ..."
