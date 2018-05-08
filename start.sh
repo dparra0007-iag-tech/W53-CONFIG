@@ -6,21 +6,11 @@ rm -rf /usr/src/app/conf/*
 rm -f /usr/src/app/conf/.env
 STR=$'#!/bin/bash\n'
 echo "$STR" > .env
-#source /usr/src/conf/.env
-git config --global http.sslVerify false
 
-git clone $GLOBALCONF
-cd $GLOBALCONFFOLDER
-git checkout conjur
-cd ..
-#source $GLOBALCONFFILE
+wget https://raw.githubusercontent.com/dparra0007/W53-GLOBAL-CONFIG/conjur/env.sh -O env-global.sh 
 
-git clone $SYSTEMCONF
-cd $SYSTEMCONFFOLDER
-git checkout conjur
-cd ..
-#source $SYSTEMCONFFILE
+wget $SYSTEMCONF -O env-project.sh
 
-cat $GLOBALCONFFILE $SYSTEMCONFFILE > .env
+cat env-global.sh env-project.sh > .env
 
 nginx -g "daemon off;"

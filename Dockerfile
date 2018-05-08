@@ -7,10 +7,6 @@ COPY start.sh .
 RUN chmod +x ./start.sh
 RUN mkdir ./conf
 
-ENV GLOBALCONF="https://github.com/dparra0007/W53-GLOBAL-CONFIG.git"
-ENV GLOBALCONFFOLDER="./W53-GLOBAL-CONFIG/"
-ENV GLOBALCONFFILE="./W53-GLOBAL-CONFIG/env.sh"
-
 ENV NGINX_VERSION 1.13.5-1~stretch
 ENV NJS_VERSION   1.13.5.0.1.13-1~stretch
 
@@ -89,7 +85,8 @@ RUN set -x \
 	&& apt-get install --no-install-recommends --no-install-suggests -y \
 						$nginxPackages \
 						gettext-base \
-                        git-core \
+                        wget \
+                        ca-certificates \
 	&& rm -rf /var/lib/apt/lists/* \
 	\
 # if we have leftovers from building, let's purge them (including extra, unnecessary build deps)
