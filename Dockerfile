@@ -1,21 +1,114 @@
-FROM frolvlad/alpine-glibc:alpine-3.6
+FROM debian:stretch-slim
 
-RUN apk update && apk upgrade && \
-    apk add --no-cache bash git openssh
+LABEL maintainer="NGINX Docker Maintainers <docker-maint@nginx.com>"
 
-ENV OPENSHIFT_VERSION v1.3.0
-ENV OPENSHIFT_HASH 3ab7af3d097b57f933eccef684a714f2368804e7
+WORKDIR /usr/src/app
+COPY start.sh .
+RUN chmod +x ./start.sh
+RUN mkdir ./conf
 
-RUN apk add --no-cache --virtual .build-deps \
-        curl \
-        tar \
-    && curl --retry 7 -Lso /tmp/client-tools.tar.gz "https://github.com/openshift/origin/releases/download/${OPENSHIFT_VERSION}/openshift-origin-client-tools-${OPENSHIFT_VERSION}-${OPENSHIFT_HASH}-linux-64bit.tar.gz" \
-    && tar zxf /tmp/client-tools.tar.gz --strip-components=1 -C /usr/local/bin \
-    && rm /tmp/client-tools.tar.gz \
-    && apk del .build-deps
+ENV GLOBALCONF="https://github.com/dparra0007/W53-GLOBAL-CONFIG.git"
+ENV GLOBALCONFFOLDER="./W53-GLOBAL-CONFIG/"
+ENV GLOBALCONFFILE="./W53-GLOBAL-CONFIG/env.sh"
 
-COPY env.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/env.sh
+ENV NGINX_VERSION 1.13.5-1~stretch
+ENV NJS_VERSION   1.13.5.0.1.13-1~stretch
 
-ENTRYPOINT ["env.sh"]
-CMD ["sh"]
+RUN set -x \
+	&& apt-get update \
+	&& apt-get install --no-install-recommends --no-install-suggests -y gnupg1 \
+	&& \
+	NGINX_GPGKEY=573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62; \
+	found=''; \
+	for server in \
+		ha.pool.sks-keyservers.net \
+		hkp://keyserver.ubuntu.com:80 \
+		hkp://p80.pool.sks-keyservers.net:80 \
+		pgp.mit.edu \
+	; do \
+		echo "Fetching GPG key $NGINX_GPGKEY from $server"; \
+		apt-key adv --keyserver "$server" --keyserver-options timeout=10 --recv-keys "$NGINX_GPGKEY" && found=yes && break; \
+	done; \
+	test -z "$found" && echo >&2 "error: failed to fetch GPG key $NGINX_GPGKEY" && exit 1; \
+	apt-get remove --purge --auto-remove -y gnupg1 && rm -rf /var/lib/apt/lists/* \
+	&& dpkgArch="$(dpkg --print-architecture)" \
+	&& nginxPackages=" \
+		nginx=${NGINX_VERSION} \
+		nginx-module-xslt=${NGINX_VERSION} \
+		nginx-module-geoip=${NGINX_VERSION} \
+		nginx-module-image-filter=${NGINX_VERSION} \
+		nginx-module-njs=${NJS_VERSION} \
+	" \
+	&& case "$dpkgArch" in \
+		amd64|i386) \
+# arches officialy built by upstream
+			echo "deb http://nginx.org/packages/mainline/debian/ stretch nginx" >> /etc/apt/sources.list \
+			&& apt-get update \
+			;; \
+		*) \
+# we're on an architecture upstream doesn't officially build for
+# let's build binaries from the published source packages
+			echo "deb-src http://nginx.org/packages/mainline/debian/ stretch nginx" >> /etc/apt/sources.list \
+			\
+# new directory for storing sources and .deb files
+			&& tempDir="$(mktemp -d)" \
+			&& chmod 777 "$tempDir" \
+# (777 to ensure APT's "_apt" user can access it too)
+			\
+# save list of currently-installed packages so build dependencies can be cleanly removed later
+			&& savedAptMark="$(apt-mark showmanual)" \
+			\
+# build .deb files from upstream's source packages (which are verified by apt-get)
+			&& apt-get update \
+			&& apt-get build-dep -y $nginxPackages \
+			&& ( \
+				cd "$tempDir" \
+				&& DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)" \
+					apt-get source --compile $nginxPackages \
+			) \
+# we don't remove APT lists here because they get re-downloaded and removed later
+			\
+# reset apt-mark's "manual" list so that "purge --auto-remove" will remove all build dependencies
+# (which is done after we install the built packages so we don't have to redownload any overlapping dependencies)
+			&& apt-mark showmanual | xargs apt-mark auto > /dev/null \
+			&& { [ -z "$savedAptMark" ] || apt-mark manual $savedAptMark; } \
+			\
+# create a temporary local APT repo to install from (so that dependency resolution can be handled by APT, as it should be)
+			&& ls -lAFh "$tempDir" \
+			&& ( cd "$tempDir" && dpkg-scanpackages . > Packages ) \
+			&& grep '^Package: ' "$tempDir/Packages" \
+			&& echo "deb [ trusted=yes ] file://$tempDir ./" > /etc/apt/sources.list.d/temp.list \
+# work around the following APT issue by using "Acquire::GzipIndexes=false" (overriding "/etc/apt/apt.conf.d/docker-gzip-indexes")
+#   Could not open file /var/lib/apt/lists/partial/_tmp_tmp.ODWljpQfkE_._Packages - open (13: Permission denied)
+#   ...
+#   E: Failed to fetch store:/var/lib/apt/lists/partial/_tmp_tmp.ODWljpQfkE_._Packages  Could not open file /var/lib/apt/lists/partial/_tmp_tmp.ODWljpQfkE_._Packages - open (13: Permission denied)
+			&& apt-get -o Acquire::GzipIndexes=false update \
+			;; \
+	esac \
+	\
+	&& apt-get install --no-install-recommends --no-install-suggests -y \
+						$nginxPackages \
+						gettext-base \
+                        git-core \
+	&& rm -rf /var/lib/apt/lists/* \
+	\
+# if we have leftovers from building, let's purge them (including extra, unnecessary build deps)
+	&& if [ -n "$tempDir" ]; then \
+		apt-get purge -y --auto-remove \
+		&& rm -rf "$tempDir" /etc/apt/sources.list.d/temp.list; \
+	fi \
+	&& chmod g+w /var/cache/nginx \
+	&& sed -i -e '/listen/!b' -e '/80;/!b' -e 's/80;/8080;/' /etc/nginx/conf.d/default.conf \
+	&& sed -i -e '/user/!b' -e '/nginx/!b' -e '/nginx/d' /etc/nginx/nginx.conf \
+	&& sed -i 's!/var/run/nginx.pid!/var/cache/nginx/nginx.pid!g' /etc/nginx/nginx.conf
+
+# forward request and error logs to docker log collector
+RUN ln -sf /dev/stdout /var/log/nginx/access.log \
+	&& ln -sf /dev/stderr /var/log/nginx/error.log
+
+EXPOSE 8080
+
+STOPSIGNAL SIGTERM
+
+#CMD ["nginx", "-g", "daemon off;"]
+CMD ./start.sh
