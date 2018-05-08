@@ -7,7 +7,7 @@ rm -f /usr/src/app/conf/.env
 STR=$'#!/bin/bash\n'
 echo "$STR" > .env
 
-wget https://raw.githubusercontent.com/dparra0007/W53-GLOBAL-CONFIG/conjur/env.sh -O env-global.sh 
+wget $GLOBALCONF -O env-global.sh 
 
 wget $SYSTEMCONF -O env-project.sh
 
