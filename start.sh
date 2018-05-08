@@ -4,7 +4,7 @@ set -e
 cd /usr/src/app/conf
 rm -rf /usr/src/app/conf/*
 rm -f /usr/src/app/conf/.env
-STR=$'!/bin/bash\n'
+STR=$'#!/bin/bash\n'
 echo "$STR" > .env
 #source /usr/src/conf/.env
 git config --global http.sslVerify false
